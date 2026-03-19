@@ -3,22 +3,22 @@
 
 Responsibility for each layer.
 
-Layer 1:	UI Screens (Add Medication, Schedule Views)
+section 1:	UI Screens (Add Medication, Schedule Views)
 
 
 
-Layer 2:	Models & Data Structures
+section 2:	Models & Data Structures
 
 
 
-Layer 3(Fabricio Cabrera):	Services (Medication logic, reminders)
-
-
-
-
-Layer 4:  Adherence tracking & history
+section 3(Fabricio Cabrera):	Services (Medication logic, reminders)
 
 
 
 
-Layer 5:	Storage layer (local file or simple DB)
+section 4:  Adherence tracking & history
+
+
+
+
+sections 5:	Storage layer (local file or simple DB)
