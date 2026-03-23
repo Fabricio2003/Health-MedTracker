@@ -87,24 +87,30 @@ public class App {
     }
 
     private static Medication createMedicationFromUserInput(Scanner scanner, String id) {
+    
+    //Ask for the name of the medication   
     System.out.print("Enter medication name: ");
     String name = scanner.nextLine();
-
+    
+    //Ask for the dosage of the medication
     System.out.print("Enter dosage (e.g., 500mg): ");
     String dosage = scanner.nextLine();
+    
+    //Ask for thr quanity of the medication
+    System.out.print("Enter quantity (how many pills are in the bottle or total number of dosages if its liquid): ");
+    int quantity = Integer.parseInt(scanner.nextLine());
 
-    // NEW: Ask for frequency per day
+    //Ask for frequency per day
     System.out.print("How many times per day will you take this medication? ");
     int frequencyPerDay = Integer.parseInt(scanner.nextLine());
 
-    // NEW: Ask for duration in days
+    //Ask for duration in days
     System.out.print("For how many days will you take this medication? ");
     int durationDays = Integer.parseInt(scanner.nextLine());
 
-    int quantity = 30; // You can later ask the user for this too
     String notes = "";
 
-    // NEW: Support both 24-hour and AM/PM formats
+    //Support both 24-hour and AM/PM formats
     DateTimeFormatter formatter24 = DateTimeFormatter.ofPattern("HH:mm");
     DateTimeFormatter formatter12 = DateTimeFormatter.ofPattern("hh:mm a");
 
