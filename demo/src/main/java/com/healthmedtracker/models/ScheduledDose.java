@@ -6,6 +6,14 @@ public class ScheduledDose {
     private boolean taken;
     private boolean skipped;
 
+    private boolean notified = false;
+
+public boolean isNotified() { 
+    return notified; 
+}
+public void markNotified() {
+     this.notified = true;
+     }
 public ScheduledDose(Medication medication, LocalDateTime time){
     this.medication = medication;
     this.time = time;

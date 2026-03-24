@@ -75,6 +75,7 @@ public class MainWindow extends JFrame {
         this.reminderService  = reminderService;
 
         buildWindow();
+        startReminderThread();
     }
 
     // ================================================================
@@ -95,7 +96,7 @@ public class MainWindow extends JFrame {
         header.setBorder(new EmptyBorder(12, 20, 12, 20));
         JLabel title = new JLabel("Health MedTracker");
         title.setFont(new Font("SansSerif", Font.BOLD, 18));
-        title.setForeground(Color.WHITE);
+        title.setForeground(Color.BLACK);
         JLabel dateLabel = new JLabel(LocalDate.now()
                 .format(DateTimeFormatter.ofPattern("MMMM d, yyyy")));
         dateLabel.setFont(FONT_SMALL);
@@ -194,7 +195,7 @@ public class MainWindow extends JFrame {
         JTextField freqF  = formField();
         JTextField durF   = formField();
         JTextField timesF = formField();
-        timesF.setToolTipText("e.g. 08:00, 14:00");
+        timesF.setToolTipText("Examples: 08:00, 2:30 PM, 7:15am");
 
         String[][] rows = {
                 {"Medication name",      null},
@@ -202,7 +203,7 @@ public class MainWindow extends JFrame {
                 {"Quantity (pills)",     null},
                 {"Times per day",        null},
                 {"Duration (days)",      null},
-                {"Dose times (HH:mm, comma-separated)", null}
+                {"Dose times (24hr or AM/PM HH:mm accepted, comma-separated)", null}
         };
         JTextField[] fields = {nameF, doseF, qtyF, freqF, durF, timesF};
 
@@ -226,10 +227,43 @@ public class MainWindow extends JFrame {
                 int    dur  = Integer.parseInt(durF.getText().trim());
 
                 List<LocalTime> times = new ArrayList<>();
+                DateTimeFormatter fmt24 = DateTimeFormatter.ofPattern("HH:mm");
+                DateTimeFormatter fmt12 = DateTimeFormatter.ofPattern("hh:mm a");
+
                 for (String t : timesF.getText().split(",")) {
-                    times.add(LocalTime.parse(t.trim(),
-                            DateTimeFormatter.ofPattern("HH:mm")));
+                    String raw = t.trim();
+                    raw = raw.trim().toUpperCase();
+                    if (raw.endsWith("AM") && !raw.endsWith(" AM")) {
+                        raw = raw.substring(0, raw.length() - 2) + " AM";
+                    }
+                    if (raw.endsWith("PM") && !raw.endsWith(" PM")) {
+                        raw = raw.substring(0, raw.length() - 2) + " PM";
+                    }
+
+                    LocalTime parsed;
+
+                     try {
+                        // Try 24-hour format first
+                          parsed = LocalTime.parse(raw, fmt24);
+                    } catch (Exception e1) {
+                        try {
+                            // Try 12-hour format (AM/PM)
+                            parsed = LocalTime.parse(raw.toUpperCase(), fmt12);
+                        } catch (Exception e2) {
+                            throw new IllegalArgumentException("Invalid time format: " + raw +
+                                    ". Use HH:mm or hh:mm AM/PM."
+                                    );
+                                }
+                            }
+
+                    times.add(parsed);
                 }
+                if (times.size() != freq){
+                    throw new IllegalArgumentException("You entered " + times.size() + " dose times, but frequency per day is " + freq +
+                    ". Please enter exactly " + freq + " times.");
+                }
+    
+
 
                 medService.addMedication(
                         new Medication(id, name, dos, freq, dur, qty, "", times));
@@ -245,7 +279,9 @@ public class MainWindow extends JFrame {
         btnRow.setBorder(new EmptyBorder(0, 16, 12, 16));
         btnRow.add(save);
 
-        dialog.add(form,   BorderLayout.CENTER);
+        dialog.add(new JScrollPane(form, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
+        BorderLayout.CENTER);
+
         dialog.add(btnRow, BorderLayout.SOUTH);
         dialog.setVisible(true);
     }
@@ -296,8 +332,10 @@ public class MainWindow extends JFrame {
     }
 
     private void refreshSchedule() {
-        todaySchedule = scheduleService.generateDailySchedule(
-                medService.getAllMedications(), LocalDate.now());
+        if (todaySchedule.isEmpty()) {
+            todaySchedule = scheduleService.generateDailySchedule(
+                     medService.getAllMedications(), LocalDate.now());
+           }
         scheduleTableModel.setRowCount(0);
         for (ScheduledDose dose : todaySchedule) {
             String status = dose.isTaken()   ? "✓ Taken"
@@ -444,7 +482,7 @@ public class MainWindow extends JFrame {
         JButton b = new JButton(text);
         b.setFont(FONT_BODY);
         b.setBackground(TEAL);
-        b.setForeground(Color.WHITE);
+        b.setForeground(Color.BLACK);
         b.setFocusPainted(false);
         b.setBorder(new EmptyBorder(8, 16, 8, 16));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -455,7 +493,7 @@ public class MainWindow extends JFrame {
         JButton b = new JButton(text);
         b.setFont(FONT_BODY);
         b.setBackground(CORAL);
-        b.setForeground(Color.WHITE);
+        b.setForeground(Color.BLACK);
         b.setFocusPainted(false);
         b.setBorder(new EmptyBorder(8, 16, 8, 16));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -465,8 +503,8 @@ public class MainWindow extends JFrame {
     private JButton ghostButton(String text) {
         JButton b = new JButton(text);
         b.setFont(FONT_BODY);
-        b.setBackground(BG);
-        b.setForeground(TEXT_MED);
+        b.setBackground(new Color(0xE8E6DE));
+        b.setForeground(TEXT_DARK);
         b.setFocusPainted(false);
         b.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(0xB4B2A9), 1, true),
@@ -484,4 +522,75 @@ public class MainWindow extends JFrame {
         JOptionPane.showMessageDialog(this, msg, "Error",
                 JOptionPane.ERROR_MESSAGE);
     }
+    private void startReminderThread() {
+    Thread t = new Thread(() -> {
+        while (true) {
+            try {
+                LocalDateTime now = LocalDateTime.now();
+
+                if (todaySchedule.isEmpty()) {
+                    todaySchedule = scheduleService.generateDailySchedule(
+                            medService.getAllMedications(), LocalDate.now());
+                }
+
+                List<ScheduledDose> due = reminderService.getUpcomingDoses(todaySchedule, now);
+
+                for (ScheduledDose dose : due) {
+                   if (!dose.isNotified()) {
+                    dose.markNotified();
+                    SwingUtilities.invokeLater(() -> showReminderPopup(dose));
+    }
+                }
+
+                Thread.sleep(1000);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    });
+
+    t.setDaemon(true);
+    t.start();
+}
+
+
+private void showReminderPopup(ScheduledDose dose) {
+    JDialog dialog = new JDialog(this, "Medication Reminder", true);
+    dialog.setSize(300, 200);
+    dialog.setLocationRelativeTo(this);
+    dialog.setLayout(new BorderLayout());
+
+    JLabel msg = new JLabel(
+            "<html><center><b>" + dose.getMedication().getName() + "</b><br>" +
+            dose.getMedication().getDosage() + "<br>" +
+            "Time: " + dose.getTime().toLocalTime().format(DateTimeFormatter.ofPattern("hh:mm a")) +
+            "</center></html>",
+            SwingConstants.CENTER
+    );
+
+    JButton take = primaryButton("Take");
+    JButton skip = dangerButton("Skip");
+
+    take.addActionListener(e -> {
+        adherenceService.recordTaken(dose);
+        dialog.dispose();
+        refreshSchedule();
+    });
+
+    skip.addActionListener(e -> {
+        adherenceService.recordMissed(dose);
+        dialog.dispose();
+        refreshSchedule();
+    });
+
+    JPanel btns = new JPanel();
+    btns.add(take);
+    btns.add(skip);
+
+    dialog.add(msg, BorderLayout.CENTER);
+    dialog.add(btns, BorderLayout.SOUTH);
+    dialog.setVisible(true);
+}
+
+
 }

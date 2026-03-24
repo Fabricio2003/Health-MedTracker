@@ -6,7 +6,6 @@ import com.healthmedtracker.services.MedicationService;
 import com.healthmedtracker.services.ReminderService;
 import com.healthmedtracker.services.ScheduleService;
 import com.healthmedtracker.ui.MainWindow;
-
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
