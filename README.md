@@ -21,4 +21,4 @@ section 4:  Adherence tracking & history
 
 
 
-sections 5:	Storage layer (local file or simple DB)
+sections 5:	Storage layer (SQLite DB)
