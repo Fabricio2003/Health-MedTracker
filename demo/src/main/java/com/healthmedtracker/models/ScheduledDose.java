@@ -40,4 +40,8 @@ public void markSkipped(){
     this.taken = false;
     this.skipped = true;
 }
+public void resetNotified() {
+    this.notified = false;
+}
+
 }

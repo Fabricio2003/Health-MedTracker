@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 public class MedicationService {
 
     private final List<Medication> medications = new ArrayList<>();
+    
 
     public void addMedication(Medication med) {
         validMedication(med); // validates the id, name, frequency
@@ -67,4 +68,13 @@ public class MedicationService {
             throw new IllegalArgumentException("A medication with ID '" + med.getId() + "' already exists.");
         }
     }
+
+    public void renumberMedications() {
+    List<Medication> meds = getAllMedications();
+    for (int i = 0; i < meds.size(); i++) {
+        meds.get(i).setId(String.valueOf(i + 1));
+    }
+}
+
+
 }

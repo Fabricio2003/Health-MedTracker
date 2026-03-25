@@ -63,6 +63,24 @@ public class MainWindow extends JFrame {
     // --- live adherence label at top of Adherence tab ---
     private JLabel adherenceSummaryLabel;
 
+    private void applyAdherenceToSchedule() {
+    for (ScheduledDose dose : todaySchedule) {
+        List<AdherenceRecord> recs =
+                adherenceService.getRecordsForMedication(dose.getMedication().getId());
+
+        for (AdherenceRecord r : recs) {
+            if (r.getScheduledTime().toLocalTime().equals(dose.getTime().toLocalTime())) {
+                if (r.getStatus() == AdherenceRecord.Status.TAKEN) {
+                    dose.markTaken();
+                } else if (r.getStatus() == AdherenceRecord.Status.MISSED) {
+                    dose.markSkipped();
+                }
+            }
+        }
+    }
+}
+
+
     public MainWindow(MedicationService medService,
                       ScheduleService scheduleService,
                       AdherenceService adherenceService,
@@ -154,10 +172,23 @@ public class MainWindow extends JFrame {
         addBtn.addActionListener(e -> showAddMedicationDialog());
         removeBtn.addActionListener(e -> {
             int row = table.getSelectedRow();
-            if (row < 0) { showInfo("Select a medication first."); return; }
+            if (row < 0) {
+                showInfo("Select a medication first.");
+                return;
+            }
             String id = (String) medTableModel.getValueAt(row, 0);
+
+            // Remove medication only; do NOT renumber IDs (keeps adherence/history stable)
             medService.removeMedication(id);
+
+            // Refresh meds table
             refreshMedications();
+
+            // Regenerate today's schedule so deleted med disappears from Schedule tab
+            todaySchedule = scheduleService.generateDailySchedule(
+                    medService.getAllMedications(), LocalDate.now());
+            applyAdherenceToSchedule();
+            refreshSchedule();
         });
 
         refreshMedications();
@@ -219,6 +250,7 @@ public class MainWindow extends JFrame {
         JButton save = primaryButton("Save");
         save.addActionListener(e -> {
             try {
+                // Keep simple ID generation (gaps are OK since we no longer renumber)
                 String id   = String.valueOf(medService.getAllMedications().size() + 1);
                 String name = nameF.getText().trim();
                 String dos  = doseF.getText().trim();
@@ -227,14 +259,15 @@ public class MainWindow extends JFrame {
                 int    dur  = Integer.parseInt(durF.getText().trim());
 
                 List<LocalTime> times = new ArrayList<>();
-                DateTimeFormatter fmt24 = DateTimeFormatter.ofPattern("HH:mm");
-                DateTimeFormatter fmt12 = DateTimeFormatter.ofPattern("hh:mm a");
+                DateTimeFormatter fmt24       = DateTimeFormatter.ofPattern("HH:mm");
+                DateTimeFormatter fmt12       = DateTimeFormatter.ofPattern("hh:mm a");
                 DateTimeFormatter fmt24single = DateTimeFormatter.ofPattern("H:mm");
                 DateTimeFormatter fmt12single = DateTimeFormatter.ofPattern("H:mm a");
 
                 for (String t : timesF.getText().split(",")) {
                     String raw = t.trim();
                     raw = raw.trim().toUpperCase();
+
                     if (raw.endsWith("AM") && !raw.endsWith(" AM")) {
                         raw = raw.substring(0, raw.length() - 2) + " AM";
                     }
@@ -243,41 +276,47 @@ public class MainWindow extends JFrame {
                     }
 
                     LocalTime parsed;
-
                     try {
-                        // Try 24-hour format first
-                          parsed = LocalTime.parse(raw, fmt24);
+                        // Try 24-hour format first (HH:mm)
+                        parsed = LocalTime.parse(raw, fmt24);
                     } catch (Exception e1) {
                         try {
-                            // Try 12-hour format (AM/PM)
-                            parsed = LocalTime.parse(raw.toUpperCase(), fmt12);
+                            // Try 12-hour format (hh:mm AM/PM)
+                            parsed = LocalTime.parse(raw, fmt12);
                         } catch (Exception e2) {
-                            try{
-                                // Try 24-hour single format 9:00
-                                parsed = LocalTime.parse(raw,fmt24single);
-                           } catch(Exception e3){
-                                try{
-                                    //Try 12-hour single format eg.9:00 PM
-                                    parsed = LocalTime.parse(raw.toUpperCase(), fmt12single);
-                                } catch(Exception e4) {
+                            try {
+                                // Try 24-hour single-digit hour (H:mm)
+                                parsed = LocalTime.parse(raw, fmt24single);
+                            } catch (Exception e3) {
+                                try {
+                                    // Try 12-hour single-digit hour (H:mm AM/PM)
+                                    parsed = LocalTime.parse(raw, fmt12single);
+                                } catch (Exception e4) {
                                     throw new IllegalArgumentException("Invalid time: " + raw);
                                 }
                             }
                         }
-                   }
+                    }
 
                     times.add(parsed);
                 }
-                if (times.size() != freq){
-                    throw new IllegalArgumentException("You entered " + times.size() + " dose times, but frequency per day is " + freq +
-                    ". Please enter exactly " + freq + " times.");
-                }
-    
 
+                if (times.size() != freq) {
+                    throw new IllegalArgumentException(
+                            "You entered " + times.size() + " dose times, but frequency per day is " + freq +
+                            ". Please enter exactly " + freq + " times.");
+                }
 
                 medService.addMedication(
                         new Medication(id, name, dos, freq, dur, qty, "", times));
                 refreshMedications();
+
+                // Regenerate today's schedule so new med appears in Schedule tab
+                todaySchedule = scheduleService.generateDailySchedule(
+                        medService.getAllMedications(), LocalDate.now());
+                applyAdherenceToSchedule();
+                refreshSchedule();
+
                 dialog.dispose();
             } catch (Exception ex) {
                 showError("Please check your input.\n" + ex.getMessage());
@@ -289,8 +328,10 @@ public class MainWindow extends JFrame {
         btnRow.setBorder(new EmptyBorder(0, 16, 12, 16));
         btnRow.add(save);
 
-        dialog.add(new JScrollPane(form, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
-        BorderLayout.CENTER);
+        dialog.add(new JScrollPane(form,
+                        JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                        JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
+                BorderLayout.CENTER);
 
         dialog.add(btnRow, BorderLayout.SOUTH);
         dialog.setVisible(true);
@@ -344,8 +385,9 @@ public class MainWindow extends JFrame {
     private void refreshSchedule() {
         if (todaySchedule.isEmpty()) {
             todaySchedule = scheduleService.generateDailySchedule(
-                     medService.getAllMedications(), LocalDate.now());
-           }
+                    medService.getAllMedications(), LocalDate.now());
+            applyAdherenceToSchedule();
+        }
         scheduleTableModel.setRowCount(0);
         for (ScheduledDose dose : todaySchedule) {
             String status = dose.isTaken()   ? "✓ Taken"
@@ -358,6 +400,7 @@ public class MainWindow extends JFrame {
                     dose.getMedication().getDosage(),
                     status
             });
+            // IMPORTANT: do NOT reset notified here, or reminders will re-fire
         }
     }
 
@@ -532,75 +575,77 @@ public class MainWindow extends JFrame {
         JOptionPane.showMessageDialog(this, msg, "Error",
                 JOptionPane.ERROR_MESSAGE);
     }
+
+    // ================================================================
+    //  Reminder thread
+    // ================================================================
+
     private void startReminderThread() {
-    Thread t = new Thread(() -> {
-        while (true) {
-            try {
-                LocalDateTime now = LocalDateTime.now();
+        Thread t = new Thread(() -> {
+            while (true) {
+                try {
+                    LocalDateTime now = LocalDateTime.now();
 
-                if (todaySchedule.isEmpty()) {
-                    todaySchedule = scheduleService.generateDailySchedule(
-                            medService.getAllMedications(), LocalDate.now());
+                    if (todaySchedule.isEmpty()) {
+                        todaySchedule = scheduleService.generateDailySchedule(
+                                medService.getAllMedications(), LocalDate.now());
+                    }
+
+                    List<ScheduledDose> due = reminderService.getUpcomingDoses(todaySchedule, now);
+
+                    for (ScheduledDose dose : due) {
+                        if (!dose.isNotified()) {
+                            dose.markNotified();
+                            SwingUtilities.invokeLater(() -> showReminderPopup(dose));
+                        }
+                    }
+
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-
-                List<ScheduledDose> due = reminderService.getUpcomingDoses(todaySchedule, now);
-
-                for (ScheduledDose dose : due) {
-                   if (!dose.isNotified()) {
-                    dose.markNotified();
-                    SwingUtilities.invokeLater(() -> showReminderPopup(dose));
-    }
-                }
-
-                Thread.sleep(1000);
-            } catch (Exception e) {
-                e.printStackTrace();
             }
-        }
-    });
+        });
 
-    t.setDaemon(true);
-    t.start();
-}
+        t.setDaemon(true);
+        t.start();
+    }
 
+    private void showReminderPopup(ScheduledDose dose) {
+        JDialog dialog = new JDialog(this, "Medication Reminder", true);
+        dialog.setSize(300, 200);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout());
 
-private void showReminderPopup(ScheduledDose dose) {
-    JDialog dialog = new JDialog(this, "Medication Reminder", true);
-    dialog.setSize(300, 200);
-    dialog.setLocationRelativeTo(this);
-    dialog.setLayout(new BorderLayout());
+        JLabel msg = new JLabel(
+                "<html><center><b>" + dose.getMedication().getName() + "</b><br>" +
+                dose.getMedication().getDosage() + "<br>" +
+                "Time: " + dose.getTime().toLocalTime().format(DateTimeFormatter.ofPattern("hh:mm a")) +
+                "</center></html>",
+                SwingConstants.CENTER
+        );
 
-    JLabel msg = new JLabel(
-            "<html><center><b>" + dose.getMedication().getName() + "</b><br>" +
-            dose.getMedication().getDosage() + "<br>" +
-            "Time: " + dose.getTime().toLocalTime().format(DateTimeFormatter.ofPattern("hh:mm a")) +
-            "</center></html>",
-            SwingConstants.CENTER
-    );
+        JButton take = primaryButton("Take");
+        JButton skip = dangerButton("Skip");
 
-    JButton take = primaryButton("Take");
-    JButton skip = dangerButton("Skip");
+        take.addActionListener(e -> {
+            adherenceService.recordTaken(dose);
+            dialog.dispose();
+            refreshSchedule();
+        });
 
-    take.addActionListener(e -> {
-        adherenceService.recordTaken(dose);
-        dialog.dispose();
-        refreshSchedule();
-    });
+        skip.addActionListener(e -> {
+            adherenceService.recordMissed(dose);
+            dialog.dispose();
+            refreshSchedule();
+        });
 
-    skip.addActionListener(e -> {
-        adherenceService.recordMissed(dose);
-        dialog.dispose();
-        refreshSchedule();
-    });
+        JPanel btns = new JPanel();
+        btns.add(take);
+        btns.add(skip);
 
-    JPanel btns = new JPanel();
-    btns.add(take);
-    btns.add(skip);
-
-    dialog.add(msg, BorderLayout.CENTER);
-    dialog.add(btns, BorderLayout.SOUTH);
-    dialog.setVisible(true);
-}
-
-
+        dialog.add(msg, BorderLayout.CENTER);
+        dialog.add(btns, BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
 }

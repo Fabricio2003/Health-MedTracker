@@ -55,6 +55,10 @@ public class Medication {
     public List <LocalTime> getDoseSchedule(){
         return doseSchedule;
     }
+    public void setId(String id) {
+         this.id = id;
+    }
+
     @Override
     public String toString() {
         return name + " (" + dosage + ", " + frequencyPerDay + "x/day at " + doseSchedule + ")";
