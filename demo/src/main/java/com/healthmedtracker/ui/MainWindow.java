@@ -229,6 +229,8 @@ public class MainWindow extends JFrame {
                 List<LocalTime> times = new ArrayList<>();
                 DateTimeFormatter fmt24 = DateTimeFormatter.ofPattern("HH:mm");
                 DateTimeFormatter fmt12 = DateTimeFormatter.ofPattern("hh:mm a");
+                DateTimeFormatter fmt24single = DateTimeFormatter.ofPattern("H:mm");
+                DateTimeFormatter fmt12single = DateTimeFormatter.ofPattern("H:mm a");
 
                 for (String t : timesF.getText().split(",")) {
                     String raw = t.trim();
@@ -242,7 +244,7 @@ public class MainWindow extends JFrame {
 
                     LocalTime parsed;
 
-                     try {
+                    try {
                         // Try 24-hour format first
                           parsed = LocalTime.parse(raw, fmt24);
                     } catch (Exception e1) {
@@ -250,11 +252,19 @@ public class MainWindow extends JFrame {
                             // Try 12-hour format (AM/PM)
                             parsed = LocalTime.parse(raw.toUpperCase(), fmt12);
                         } catch (Exception e2) {
-                            throw new IllegalArgumentException("Invalid time format: " + raw +
-                                    ". Use HH:mm or hh:mm AM/PM."
-                                    );
+                            try{
+                                // Try 24-hour single format 9:00
+                                parsed = LocalTime.parse(raw,fmt24single);
+                           } catch(Exception e3){
+                                try{
+                                    //Try 12-hour single format eg.9:00 PM
+                                    parsed = LocalTime.parse(raw.toUpperCase(), fmt12single);
+                                } catch(Exception e4) {
+                                    throw new IllegalArgumentException("Invalid time: " + raw);
                                 }
                             }
+                        }
+                   }
 
                     times.add(parsed);
                 }
