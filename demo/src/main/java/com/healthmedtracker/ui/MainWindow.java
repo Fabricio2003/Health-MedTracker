@@ -59,6 +59,10 @@ public class MainWindow extends JFrame {
     private DefaultTableModel scheduleTableModel;
     private DefaultTableModel adherenceTableModel;
     private DefaultTableModel historyTableModel;
+    private JPanel calendarGrid;
+    private JLabel monthLabel;
+    private LocalDate calendarDate = LocalDate.now();
+
 
     // --- live adherence label at top of Adherence tab ---
     private JLabel adherenceSummaryLabel;
@@ -130,6 +134,7 @@ public class MainWindow extends JFrame {
         tabs.addTab("  Schedule     ", buildScheduleTab());
         tabs.addTab("  Adherence    ", buildAdherenceTab());
         tabs.addTab("  History      ", buildHistoryTab());
+        tabs.addTab("  Calendar     ", buildCalendarTab());
 
         // Refresh relevant data when user switches tabs
         tabs.addChangeListener(e -> {
@@ -137,6 +142,7 @@ public class MainWindow extends JFrame {
             if (idx == 1) refreshSchedule();
             if (idx == 2) refreshAdherence();
             if (idx == 3) refreshHistory();
+            if (idx == 4) refreshCalendar();
         });
 
         add(header, BorderLayout.NORTH);
@@ -648,4 +654,151 @@ public class MainWindow extends JFrame {
         dialog.add(btns, BorderLayout.SOUTH);
         dialog.setVisible(true);
     }
+
+// ================================================================
+//  Tab 5 — Calendar View
+// ================================================================
+
+private JPanel buildCalendarTab() {
+        JPanel panel = new JPanel(new BorderLayout(15, 15));
+        panel.setBackground(BG);
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        // --- Header (Month / Year Navigation) ---
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(BG);
+        
+        monthLabel = new JLabel("", SwingConstants.CENTER);
+        monthLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
+        monthLabel.setForeground(SLATE);
+
+        JButton prev = ghostButton("  ◀ Previous  ");
+        JButton next = ghostButton("  Next ▶  ");
+        prev.addActionListener(e -> { calendarDate = calendarDate.minusMonths(1); refreshCalendar(); });
+        next.addActionListener(e -> { calendarDate = calendarDate.plusMonths(1); refreshCalendar(); });
+
+        header.add(prev, BorderLayout.WEST);
+        header.add(monthLabel, BorderLayout.CENTER);
+        header.add(next, BorderLayout.EAST);
+
+        // --- Grid Container ---
+        calendarGrid = new JPanel(new GridLayout(0, 7, 8, 8));
+        calendarGrid.setBackground(BG);
+
+        panel.add(header, BorderLayout.NORTH);
+        panel.add(new JScrollPane(calendarGrid, 
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, 
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER), BorderLayout.CENTER);
+
+        refreshCalendar();
+        return panel;
+    }
+
+    public void refreshCalendar() {
+        calendarGrid.removeAll();
+        monthLabel.setText(calendarDate.getMonth().toString() + " " + calendarDate.getYear());
+
+        // Day Headers (SUN, MON, etc.)
+        String[] days = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+        for (String d : days) {
+            JLabel l = new JLabel(d, SwingConstants.CENTER);
+            l.setFont(new Font("SansSerif", Font.BOLD, 13));
+            l.setForeground(TEXT_MED);
+            calendarGrid.add(l);
+        }
+
+        LocalDate firstOfMonth = calendarDate.withDayOfMonth(1);
+        int skip = firstOfMonth.getDayOfWeek().getValue() % 7;
+        
+        // Empty slots for previous month
+        for (int i = 0; i < skip; i++) {
+            JPanel empty = new JPanel();
+            empty.setBackground(BG);
+            calendarGrid.add(empty);
+        }
+
+        int daysInMonth = calendarDate.lengthOfMonth();
+        for (int i = 1; i <= daysInMonth; i++) {
+            LocalDate date = calendarDate.withDayOfMonth(i);
+            calendarGrid.add(createDayPanel(date));
+        }
+
+        calendarGrid.revalidate();
+        calendarGrid.repaint();
+    }
+
+    private JPanel createDayPanel(LocalDate date) {
+        JPanel dayBox = new JPanel(new BorderLayout());
+        dayBox.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(0xE2E8F0), 1, true),
+                new EmptyBorder(5, 5, 5, 5)
+        ));
+        
+        boolean isToday = date.equals(LocalDate.now());
+        dayBox.setBackground(isToday ? TEAL_LIGHT : Color.WHITE);
+
+        // Day Number Header
+        JLabel dayNum = new JLabel(String.valueOf(date.getDayOfMonth()));
+        dayNum.setFont(new Font("SansSerif", Font.BOLD, 14));
+        dayNum.setForeground(isToday ? TEAL : SLATE);
+        
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        topPanel.setOpaque(false);
+        topPanel.add(dayNum);
+        dayBox.add(topPanel, BorderLayout.NORTH);
+
+        
+        JPanel medList = new JPanel();
+        medList.setLayout(new BoxLayout(medList, BoxLayout.Y_AXIS));
+        medList.setOpaque(false);
+
+        List<ScheduledDose> allDoses = scheduleService.generateDailySchedule(medService.getAllMedications(), date);
+        
+        for (ScheduledDose dose : allDoses) {
+            Medication med = dose.getMedication();
+            
+            LocalDate assumedStartDate = LocalDate.now();
+            LocalDate endDate = assumedStartDate.plusDays(med.getDurationDays() - 1);
+            
+            
+            if (!date.isBefore(assumedStartDate) && !date.isAfter(endDate)) {
+                
+                String timeStr = dose.getTime().toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"));
+                
+                
+                JLabel medLabel = new JLabel("<html><b>" + timeStr + "</b> " + med.getName() + "</html>");
+                medLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                medLabel.setForeground(TEXT_DARK);
+                medLabel.setIconTextGap(4);
+                
+                
+                String statusColor = "#5F5E5A";
+                List<AdherenceRecord> records = adherenceService.getRecordsForDate(date);
+                for (AdherenceRecord r : records) {
+                    if (r.getMedicationId().equals(med.getId()) && 
+                        r.getScheduledTime().toLocalTime().equals(dose.getTime().toLocalTime())) {
+                        if (r.getStatus() == AdherenceRecord.Status.TAKEN) statusColor = "#1D9E75"; 
+                        if (r.getStatus() == AdherenceRecord.Status.MISSED) statusColor = "#D85A30"; 
+                    }
+                }
+                
+                medLabel.setText("<html><font color='" + statusColor + "'>●</font> <b>" + timeStr + "</b> <font color='#3C3489'>" + med.getName() + "</font></html>");
+                
+                medList.add(medLabel);
+                medList.add(Box.createVerticalStrut(4)); 
+            }
+        }
+
+        JScrollPane scroll = new JScrollPane(medList);
+        scroll.setBorder(null);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+        dayBox.add(scroll, BorderLayout.CENTER);
+
+        return dayBox;
+    }
 }
+
