@@ -167,7 +167,7 @@ public class MainWindow extends JFrame {
 
         add(header, BorderLayout.NORTH);
         add(tabs,   BorderLayout.CENTER);
-        new Timer(5000, e -> refreshCalendar()).start();
+        
 
     }
 
@@ -383,7 +383,7 @@ public class MainWindow extends JFrame {
             }
 
             medService.addMedication(
-                new Medication(id, name, dos, freq, dur, qty, "", times)
+                new Medication(id, name, dos, freq, dur, qty, LocalDate.now(), times)
             );
 
             refreshMedications();
@@ -694,7 +694,7 @@ public class MainWindow extends JFrame {
         Medication med = grouped.get(medName).get(0).getMedication();
 
         // Determine if medication is active on this date
-        LocalDate start = LocalDate.now(); // If you store start date, replace this
+        LocalDate start = med.getStartDate();// If you store start date, replace this
         LocalDate end = start.plusDays(med.getDurationDays() - 1);
 
         if (date.isBefore(start) || date.isAfter(end)) {

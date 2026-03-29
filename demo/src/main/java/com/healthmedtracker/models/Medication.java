@@ -1,4 +1,5 @@
 package com.healthmedtracker.models;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -11,17 +12,19 @@ public class Medication {
     private int quantityPerBottle;
     private String notes;
     private List<LocalTime> doseSchedule;
+    private LocalDate startDate;
+
 
     public Medication(String id, String name, String dosage, int frequencyPerDay,
-            int durationDays, int quantityPerBottle, String notes, List<LocalTime> doseSchedule) {
+            int durationDays, int quantityPerBottle, LocalDate startDate, List<LocalTime> doseSchedule) {
         this.id = id;
         this.name = name;
         this.dosage = dosage;
         this.frequencyPerDay = frequencyPerDay;
         this.durationDays = durationDays;
         this.quantityPerBottle = quantityPerBottle;
-        this.notes = notes;
         this.doseSchedule = doseSchedule;
+        this.startDate = startDate;
     }
 
     public String getId() {
@@ -58,6 +61,11 @@ public class Medication {
     public void setId(String id) {
          this.id = id;
     }
+    public LocalDate getStartDate() {
+       return startDate;
+   }
+
+
 
     @Override
     public String toString() {
