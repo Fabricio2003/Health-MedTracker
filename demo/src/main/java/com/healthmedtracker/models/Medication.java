@@ -3,8 +3,9 @@ package com.healthmedtracker.models;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-
-public class Medication {
+import java.io.Serializable;
+public class Medication implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private String id;
     private String name;
@@ -35,7 +36,7 @@ public class Medication {
     public String getId() { return id; }
     public String getName() { return name; }
     public String getDosage() { return dosage; }
-    public int getfrequencyPerDay() { return frequencyPerDay; }
+    public int getFrequencyPerDay() { return frequencyPerDay; }
     public int getDurationDays() { return durationDays; }
     public int getQuantityPerBottle() { return quantityPerBottle; }
     public String getNotes() { return notes; }

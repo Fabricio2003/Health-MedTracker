@@ -210,6 +210,7 @@ public class MainWindow extends JFrame {
 
             // Remove medication only; do NOT renumber IDs (keeps adherence/history stable)
             medService.removeMedication(id);
+            
 
             // Refresh meds table
             refreshMedications();
@@ -231,7 +232,7 @@ public class MainWindow extends JFrame {
         for (Medication m : medService.getAllMedications()) {
             medTableModel.addRow(new Object[]{
                     m.getId(), m.getName(), m.getDosage(),
-                    m.getfrequencyPerDay(), m.getDurationDays() + " days",
+                    m.getFrequencyPerDay(), m.getDurationDays() + " days",
                     m.getQuantityPerBottle()
             });
         }
@@ -594,9 +595,7 @@ public class MainWindow extends JFrame {
     private LocalDate calendarViewDate = LocalDate.now();
     private LocalDate lastKnownToday = LocalDate.now();
     private JTabbedPane tabs;
-    
 
-  
 
     private JPanel buildCalendarTab() {
       JPanel panel = new JPanel(new BorderLayout(15, 15));

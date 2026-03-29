@@ -73,34 +73,32 @@ public class DatabaseMedicationService extends MedicationService {
     }
 
     @Override
-    public void addMedication(Medication med) {
-        super.addMedication(med);
+public void removeMedication(String id) {
+    // 1. Remove from SQL
+    String deleteMed = "DELETE FROM medication WHERE id = ?";
+    String deleteTimes = "DELETE FROM dose_time WHERE med_id = ?";
 
-        String sql = """
-            INSERT INTO medication (id, name, dosage, frequency, duration_days, quantity_per_bottle, notes, start_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """;
+    try (Connection conn = DatabaseConnection.connect()) {
 
-        try (Connection conn = DatabaseConnection.connect();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, med.getId());
-            stmt.setString(2, med.getName());
-            stmt.setString(3, med.getDosage());
-            stmt.setInt(4, med.getfrequencyPerDay());
-            stmt.setInt(5, med.getDurationDays());
-            stmt.setInt(6, med.getQuantityPerBottle());
-            stmt.setString(7, med.getNotes());
-            stmt.setString(8, med.getStartDate().toString());
-
+        // Delete dose times first (FK constraint)
+        try (PreparedStatement stmt = conn.prepareStatement(deleteTimes)) {
+            stmt.setString(1, id);
             stmt.executeUpdate();
-
-            saveDoseTimes(med);
-
-        } catch (Exception e) {
-            e.printStackTrace();
         }
+
+        // Delete medication
+        try (PreparedStatement stmt = conn.prepareStatement(deleteMed)) {
+            stmt.setString(1, id);
+            stmt.executeUpdate();
+        }
+
+    } catch (Exception e) {
+        e.printStackTrace();
     }
+
+    // 2. Remove from in-memory list + file
+    super.removeMedication(id);
+}
 
     private void saveDoseTimes(Medication med) {
         String sql = "INSERT INTO dose_time (med_id, time) VALUES (?, ?)";
