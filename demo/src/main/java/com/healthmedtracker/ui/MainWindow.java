@@ -1,5 +1,5 @@
 package com.healthmedtracker.ui;
-import com.healthmedtracker.utils.DatabaseInitializer;
+
 import com.healthmedtracker.models.Medication;
 import com.healthmedtracker.models.ScheduledDose;
 import com.healthmedtracker.models.AdherenceRecord;
@@ -59,13 +59,17 @@ public class MainWindow extends JFrame {
     private DefaultTableModel scheduleTableModel;
     private DefaultTableModel adherenceTableModel;
     private DefaultTableModel historyTableModel;
-    private JPanel calendarGrid;
-    private JLabel monthLabel;
-    private LocalDate calendarDate = LocalDate.now();
-
 
     // --- live adherence label at top of Adherence tab ---
     private JLabel adherenceSummaryLabel;
+    private int getTimesPerDay(JTextField freqField) {
+    try {
+        return Integer.parseInt(freqField.getText().trim());
+    } catch (Exception e) {
+        return -1; // invalid or empty
+    }
+}
+
 
     private void applyAdherenceToSchedule() {
     for (ScheduledDose dose : todaySchedule) {
@@ -134,7 +138,6 @@ public class MainWindow extends JFrame {
         tabs.addTab("  Schedule     ", buildScheduleTab());
         tabs.addTab("  Adherence    ", buildAdherenceTab());
         tabs.addTab("  History      ", buildHistoryTab());
-        tabs.addTab("  Calendar     ", buildCalendarTab());
 
         // Refresh relevant data when user switches tabs
         tabs.addChangeListener(e -> {
@@ -142,7 +145,6 @@ public class MainWindow extends JFrame {
             if (idx == 1) refreshSchedule();
             if (idx == 2) refreshAdherence();
             if (idx == 3) refreshHistory();
-            if (idx == 4) refreshCalendar();
         });
 
         add(header, BorderLayout.NORTH);
@@ -213,135 +215,184 @@ public class MainWindow extends JFrame {
     }
 
     private void showAddMedicationDialog() {
-        JDialog dialog = new JDialog(this, "Add Medication", true);
-        dialog.setSize(400, 440);
-        dialog.setLocationRelativeTo(this);
-        dialog.setLayout(new BorderLayout());
+    JDialog dialog = new JDialog(this, "Add Medication", true);
+    dialog.setSize(420, 520);
+    dialog.setLocationRelativeTo(this);
+    dialog.setLayout(new BorderLayout());
 
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(BG);
-        form.setBorder(new EmptyBorder(16, 20, 16, 20));
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets  = new Insets(6, 4, 6, 4);
-        gc.fill    = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 1;
+    JPanel form = new JPanel(new GridBagLayout());
+    form.setBackground(BG);
+    form.setBorder(new EmptyBorder(16, 20, 16, 20));
+    GridBagConstraints gc = new GridBagConstraints();
+    gc.insets  = new Insets(6, 4, 6, 4);
+    gc.fill    = GridBagConstraints.HORIZONTAL;
+    gc.weightx = 1;
 
-        JTextField nameF  = formField();
-        JTextField doseF  = formField();
-        JTextField qtyF   = formField();
-        JTextField freqF  = formField();
-        JTextField durF   = formField();
-        JTextField timesF = formField();
-        timesF.setToolTipText("Examples: 08:00, 2:30 PM, 7:15am");
+    JTextField nameF  = formField();
+    JTextField doseF  = formField();
+    JTextField qtyF   = formField();
+    JTextField freqF  = formField();
+    JTextField durF   = formField();
 
-        String[][] rows = {
-                {"Medication name",      null},
-                {"Dosage (e.g. 500mg)",  null},
-                {"Quantity (pills)",     null},
-                {"Times per day",        null},
-                {"Duration (days)",      null},
-                {"Dose times (24hr or AM/PM HH:mm accepted, comma-separated)", null}
-        };
-        JTextField[] fields = {nameF, doseF, qtyF, freqF, durF, timesF};
+    // ⭐ Dynamic time list panel
+    JPanel timesPanel = new JPanel();
+    timesPanel.setLayout(new BoxLayout(timesPanel, BoxLayout.Y_AXIS));
+    timesPanel.setBackground(BG);
 
-        for (int i = 0; i < rows.length; i++) {
-            gc.gridy = i * 2;     gc.gridx = 0;
-            JLabel lbl = new JLabel(rows[i][0]);
-            lbl.setFont(FONT_SMALL); lbl.setForeground(TEXT_MED);
-            form.add(lbl, gc);
-            gc.gridy = i * 2 + 1; gc.gridx = 0;
-            form.add(fields[i], gc);
+    JButton addTimeBtn = primaryButton("+ Add Time");
+
+    // Add time button logic
+    addTimeBtn.addActionListener(ev -> {
+          int max = getTimesPerDay(freqF);
+
+         if (max <= 0) {
+        showError("Please enter a valid 'Times per day' value first.");
+        return;
         }
 
-        JButton save = primaryButton("Save");
-        save.addActionListener(e -> {
-            try {
-                // Keep simple ID generation (gaps are OK since we no longer renumber)
-                String id   = String.valueOf(medService.getAllMedications().size() + 1);
-                String name = nameF.getText().trim();
-                String dos  = doseF.getText().trim();
-                int    qty  = Integer.parseInt(qtyF.getText().trim());
-                int    freq = Integer.parseInt(freqF.getText().trim());
-                int    dur  = Integer.parseInt(durF.getText().trim());
+        // Count existing time rows
+        int currentCount = 0;
+        for (Component c : timesPanel.getComponents()) {
+        if (c instanceof JPanel) currentCount++;
+        }
 
-                List<LocalTime> times = new ArrayList<>();
-                DateTimeFormatter fmt24       = DateTimeFormatter.ofPattern("HH:mm");
-                DateTimeFormatter fmt12       = DateTimeFormatter.ofPattern("hh:mm a");
-                DateTimeFormatter fmt24single = DateTimeFormatter.ofPattern("H:mm");
-                DateTimeFormatter fmt12single = DateTimeFormatter.ofPattern("H:mm a");
+        if (currentCount >= max) {
+        showError("You cannot add more than " + max + " times.");
+        return;
+        }
+        JTextField tf = formField();
+        tf.setPreferredSize(new Dimension(120, 28));
 
-                for (String t : timesF.getText().split(",")) {
-                    String raw = t.trim();
-                    raw = raw.trim().toUpperCase();
+        JButton removeBtn = dangerButton("X");
+        removeBtn.setPreferredSize(new Dimension(45, 28));
 
-                    if (raw.endsWith("AM") && !raw.endsWith(" AM")) {
-                        raw = raw.substring(0, raw.length() - 2) + " AM";
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        row.setBackground(BG);
+        row.add(tf);
+        row.add(removeBtn);
+
+        removeBtn.addActionListener(e2 -> {
+            timesPanel.remove(row);
+            timesPanel.revalidate();
+            timesPanel.repaint();
+        });
+
+        timesPanel.add(row);
+        timesPanel.revalidate();
+        timesPanel.repaint();
+    });
+
+    // Layout fields
+    String[] labels = {
+        "Medication name", "Dosage (e.g. 500mg)", "Quantity (pills)",
+        "Times per day", "Duration (days)", "Dose Times"
+    };
+    JComponent[] fields = {nameF, doseF, qtyF, freqF, durF, timesPanel};
+
+    for (int i = 0; i < labels.length; i++) {
+        gc.gridy = i * 2;
+        JLabel lbl = new JLabel(labels[i]);
+        lbl.setFont(FONT_SMALL);
+        lbl.setForeground(TEXT_MED);
+        form.add(lbl, gc);
+
+        gc.gridy = i * 2 + 1;
+        if (i == 5) {
+            // Times panel + Add button
+            JPanel wrapper = new JPanel(new BorderLayout());
+            wrapper.setBackground(BG);
+            wrapper.add(timesPanel, BorderLayout.CENTER);
+            wrapper.add(addTimeBtn, BorderLayout.SOUTH);
+            form.add(wrapper, gc);
+        } else {
+            form.add(fields[i], gc);
+        }
+    }
+
+    // ⭐ Time normalization helper
+    DateTimeFormatter fmt24 = DateTimeFormatter.ofPattern("HH:mm");
+    DateTimeFormatter fmt12 = DateTimeFormatter.ofPattern("hh:mm a");
+
+    JButton save = primaryButton("Save");
+    save.addActionListener(e -> {
+        try {
+            String id   = String.valueOf(medService.getAllMedications().size() + 1);
+            String name = nameF.getText().trim();
+            String dos  = doseF.getText().trim();
+            int qty     = Integer.parseInt(qtyF.getText().trim());
+            int freq    = Integer.parseInt(freqF.getText().trim());
+            int dur     = Integer.parseInt(durF.getText().trim());
+
+            List<LocalTime> times = new ArrayList<>();
+
+            for (Component c : timesPanel.getComponents()) {
+                if (c instanceof JPanel row) {
+                    JTextField tf = (JTextField) row.getComponent(0);
+                    String raw = tf.getText().trim().toUpperCase();
+
+                    //  Auto-correct H:mm → HH:mm
+                    if (raw.matches("^[0-9]:[0-9]{2}.*")) {
+                        raw = "0" + raw;
                     }
-                    if (raw.endsWith("PM") && !raw.endsWith(" PM")) {
-                        raw = raw.substring(0, raw.length() - 2) + " PM";
-                    }
+
+                    // Normalize AM/PM spacing
+                    raw = raw.replaceAll("(?i)(AM)$", " AM");
+                    raw = raw.replaceAll("(?i)(PM)$", " PM");
 
                     LocalTime parsed;
+
                     try {
-                        // Try 24-hour format first (HH:mm)
                         parsed = LocalTime.parse(raw, fmt24);
                     } catch (Exception e1) {
                         try {
-                            // Try 12-hour format (hh:mm AM/PM)
                             parsed = LocalTime.parse(raw, fmt12);
                         } catch (Exception e2) {
-                            try {
-                                // Try 24-hour single-digit hour (H:mm)
-                                parsed = LocalTime.parse(raw, fmt24single);
-                            } catch (Exception e3) {
-                                try {
-                                    // Try 12-hour single-digit hour (H:mm AM/PM)
-                                    parsed = LocalTime.parse(raw, fmt12single);
-                                } catch (Exception e4) {
-                                    throw new IllegalArgumentException("Invalid time: " + raw);
-                                }
-                            }
+                            throw new IllegalArgumentException("Invalid time: " + raw);
                         }
                     }
 
                     times.add(parsed);
                 }
-
-                if (times.size() != freq) {
-                    throw new IllegalArgumentException(
-                            "You entered " + times.size() + " dose times, but frequency per day is " + freq +
-                            ". Please enter exactly " + freq + " times.");
-                }
-
-                medService.addMedication(
-                        new Medication(id, name, dos, freq, dur, qty, "", times));
-                refreshMedications();
-
-                // Regenerate today's schedule so new med appears in Schedule tab
-                todaySchedule = scheduleService.generateDailySchedule(
-                        medService.getAllMedications(), LocalDate.now());
-                applyAdherenceToSchedule();
-                refreshSchedule();
-
-                dialog.dispose();
-            } catch (Exception ex) {
-                showError("Please check your input.\n" + ex.getMessage());
             }
-        });
 
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        btnRow.setBackground(BG);
-        btnRow.setBorder(new EmptyBorder(0, 16, 12, 16));
-        btnRow.add(save);
+            if (times.size() != freq) {
+                throw new IllegalArgumentException(
+                    "You entered " + times.size() + " times, but frequency is " + freq + "."
+                );
+            }
 
-        dialog.add(new JScrollPane(form,
-                        JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                        JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
-                BorderLayout.CENTER);
+            medService.addMedication(
+                new Medication(id, name, dos, freq, dur, qty, "", times)
+            );
 
-        dialog.add(btnRow, BorderLayout.SOUTH);
-        dialog.setVisible(true);
-    }
+            refreshMedications();
+            todaySchedule = scheduleService.generateDailySchedule(
+                medService.getAllMedications(), LocalDate.now()
+            );
+            applyAdherenceToSchedule();
+            refreshSchedule();
+
+            dialog.dispose();
+
+        } catch (Exception ex) {
+            showError("Please check your input.\n" + ex.getMessage());
+        }
+    });
+
+    JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    btnRow.setBackground(BG);
+    btnRow.setBorder(new EmptyBorder(0, 16, 12, 16));
+    btnRow.add(save);
+
+    dialog.add(new JScrollPane(form,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
+        BorderLayout.CENTER);
+
+    dialog.add(btnRow, BorderLayout.SOUTH);
+    dialog.setVisible(true);
+}
+
 
     // ================================================================
     //  Tab 2 — Schedule
@@ -654,151 +705,4 @@ public class MainWindow extends JFrame {
         dialog.add(btns, BorderLayout.SOUTH);
         dialog.setVisible(true);
     }
-
-// ================================================================
-//  Tab 5 — Calendar View
-// ================================================================
-
-private JPanel buildCalendarTab() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(BG);
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
-
-        // --- Header (Month / Year Navigation) ---
-        JPanel header = new JPanel(new BorderLayout());
-        header.setBackground(BG);
-        
-        monthLabel = new JLabel("", SwingConstants.CENTER);
-        monthLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
-        monthLabel.setForeground(SLATE);
-
-        JButton prev = ghostButton("  ◀ Previous  ");
-        JButton next = ghostButton("  Next ▶  ");
-        prev.addActionListener(e -> { calendarDate = calendarDate.minusMonths(1); refreshCalendar(); });
-        next.addActionListener(e -> { calendarDate = calendarDate.plusMonths(1); refreshCalendar(); });
-
-        header.add(prev, BorderLayout.WEST);
-        header.add(monthLabel, BorderLayout.CENTER);
-        header.add(next, BorderLayout.EAST);
-
-        // --- Grid Container ---
-        calendarGrid = new JPanel(new GridLayout(0, 7, 8, 8));
-        calendarGrid.setBackground(BG);
-
-        panel.add(header, BorderLayout.NORTH);
-        panel.add(new JScrollPane(calendarGrid, 
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, 
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER), BorderLayout.CENTER);
-
-        refreshCalendar();
-        return panel;
-    }
-
-    public void refreshCalendar() {
-        calendarGrid.removeAll();
-        monthLabel.setText(calendarDate.getMonth().toString() + " " + calendarDate.getYear());
-
-        // Day Headers (SUN, MON, etc.)
-        String[] days = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
-        for (String d : days) {
-            JLabel l = new JLabel(d, SwingConstants.CENTER);
-            l.setFont(new Font("SansSerif", Font.BOLD, 13));
-            l.setForeground(TEXT_MED);
-            calendarGrid.add(l);
-        }
-
-        LocalDate firstOfMonth = calendarDate.withDayOfMonth(1);
-        int skip = firstOfMonth.getDayOfWeek().getValue() % 7;
-        
-        // Empty slots for previous month
-        for (int i = 0; i < skip; i++) {
-            JPanel empty = new JPanel();
-            empty.setBackground(BG);
-            calendarGrid.add(empty);
-        }
-
-        int daysInMonth = calendarDate.lengthOfMonth();
-        for (int i = 1; i <= daysInMonth; i++) {
-            LocalDate date = calendarDate.withDayOfMonth(i);
-            calendarGrid.add(createDayPanel(date));
-        }
-
-        calendarGrid.revalidate();
-        calendarGrid.repaint();
-    }
-
-    private JPanel createDayPanel(LocalDate date) {
-        JPanel dayBox = new JPanel(new BorderLayout());
-        dayBox.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(0xE2E8F0), 1, true),
-                new EmptyBorder(5, 5, 5, 5)
-        ));
-        
-        boolean isToday = date.equals(LocalDate.now());
-        dayBox.setBackground(isToday ? TEAL_LIGHT : Color.WHITE);
-
-        // Day Number Header
-        JLabel dayNum = new JLabel(String.valueOf(date.getDayOfMonth()));
-        dayNum.setFont(new Font("SansSerif", Font.BOLD, 14));
-        dayNum.setForeground(isToday ? TEAL : SLATE);
-        
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        topPanel.setOpaque(false);
-        topPanel.add(dayNum);
-        dayBox.add(topPanel, BorderLayout.NORTH);
-
-        
-        JPanel medList = new JPanel();
-        medList.setLayout(new BoxLayout(medList, BoxLayout.Y_AXIS));
-        medList.setOpaque(false);
-
-        List<ScheduledDose> allDoses = scheduleService.generateDailySchedule(medService.getAllMedications(), date);
-        
-        for (ScheduledDose dose : allDoses) {
-            Medication med = dose.getMedication();
-            
-            LocalDate assumedStartDate = LocalDate.now();
-            LocalDate endDate = assumedStartDate.plusDays(med.getDurationDays() - 1);
-            
-            
-            if (!date.isBefore(assumedStartDate) && !date.isAfter(endDate)) {
-                
-                String timeStr = dose.getTime().toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"));
-                
-                
-                JLabel medLabel = new JLabel("<html><b>" + timeStr + "</b> " + med.getName() + "</html>");
-                medLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
-                medLabel.setForeground(TEXT_DARK);
-                medLabel.setIconTextGap(4);
-                
-                
-                String statusColor = "#5F5E5A";
-                List<AdherenceRecord> records = adherenceService.getRecordsForDate(date);
-                for (AdherenceRecord r : records) {
-                    if (r.getMedicationId().equals(med.getId()) && 
-                        r.getScheduledTime().toLocalTime().equals(dose.getTime().toLocalTime())) {
-                        if (r.getStatus() == AdherenceRecord.Status.TAKEN) statusColor = "#1D9E75"; 
-                        if (r.getStatus() == AdherenceRecord.Status.MISSED) statusColor = "#D85A30"; 
-                    }
-                }
-                
-                medLabel.setText("<html><font color='" + statusColor + "'>●</font> <b>" + timeStr + "</b> <font color='#3C3489'>" + med.getName() + "</font></html>");
-                
-                medList.add(medLabel);
-                medList.add(Box.createVerticalStrut(4)); 
-            }
-        }
-
-        JScrollPane scroll = new JScrollPane(medList);
-        scroll.setBorder(null);
-        scroll.setOpaque(false);
-        scroll.getViewport().setOpaque(false);
-        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-
-        dayBox.add(scroll, BorderLayout.CENTER);
-
-        return dayBox;
-    }
 }
-
