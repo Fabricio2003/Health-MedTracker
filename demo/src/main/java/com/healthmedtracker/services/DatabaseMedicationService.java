@@ -1,0 +1,120 @@
+package com.healthmedtracker.services;
+
+import com.healthmedtracker.models.Medication;
+import com.healthmedtracker.utils.DatabaseConnection;
+
+import java.sql.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+
+public class DatabaseMedicationService extends MedicationService {
+
+    public DatabaseMedicationService() {
+        loadAllMedications();
+    }
+
+    private void loadAllMedications() {
+        String sql = "SELECT * FROM medication";
+
+        try (Connection conn = DatabaseConnection.connect();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                String id = rs.getString("id");
+                String name = rs.getString("name");
+                String dosage = rs.getString("dosage");
+                int freq = rs.getInt("frequency");
+                int duration = rs.getInt("duration_days");
+                int qty = rs.getInt("quantity_per_bottle");
+
+                String startStr = rs.getString("start_date");
+                LocalDate startDate = (startStr != null)
+                        ? LocalDate.parse(startStr)
+                        : LocalDate.now();
+
+                List<LocalTime> times = loadDoseTimes(id);
+
+                Medication med = new Medication(
+                        id, name, dosage, freq, duration, qty, startDate, times
+                );
+
+                super.addMedication(med);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private List<LocalTime> loadDoseTimes(String medId) {
+        List<LocalTime> times = new ArrayList<>();
+
+        String sql = "SELECT time FROM dose_time WHERE med_id = ?";
+
+        try (Connection conn = DatabaseConnection.connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, medId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                times.add(LocalTime.parse(rs.getString("time")));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return times;
+    }
+
+    @Override
+    public void addMedication(Medication med) {
+        super.addMedication(med);
+
+        String sql = """
+            INSERT INTO medication (id, name, dosage, frequency, duration_days, quantity_per_bottle, notes, start_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+
+        try (Connection conn = DatabaseConnection.connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, med.getId());
+            stmt.setString(2, med.getName());
+            stmt.setString(3, med.getDosage());
+            stmt.setInt(4, med.getfrequencyPerDay());
+            stmt.setInt(5, med.getDurationDays());
+            stmt.setInt(6, med.getQuantityPerBottle());
+            stmt.setString(7, med.getNotes());
+            stmt.setString(8, med.getStartDate().toString());
+
+            stmt.executeUpdate();
+
+            saveDoseTimes(med);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveDoseTimes(Medication med) {
+        String sql = "INSERT INTO dose_time (med_id, time) VALUES (?, ?)";
+
+        try (Connection conn = DatabaseConnection.connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            for (LocalTime t : med.getDoseSchedule()) {
+                stmt.setString(1, med.getId());
+                stmt.setString(2, t.toString());
+                stmt.executeUpdate();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

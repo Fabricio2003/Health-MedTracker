@@ -14,7 +14,16 @@ public class DatabaseInitializer {
                 frequency INTEGER NOT NULL CHECK(frequency >= 0),
                 duration_days INTEGER,
                 quantity_per_bottle INTEGER,
-                notes TEXT
+                notes TEXT,
+                start_date TEXT
+            );
+        """;
+
+        String sqlTimes = """
+            CREATE TABLE IF NOT EXISTS dose_time (
+                med_id TEXT NOT NULL,
+                time TEXT NOT NULL,
+                FOREIGN KEY (med_id) REFERENCES medication(id)
             );
         """;
 
@@ -22,6 +31,7 @@ public class DatabaseInitializer {
              Statement stmt = conn.createStatement()) {
 
             stmt.execute(sql);
+            stmt.execute(sqlTimes);
             System.out.println("Database ready!");
 
         } catch (Exception e) {

@@ -1,6 +1,7 @@
 package com.healthmedtracker;
 
 import com.healthmedtracker.services.AdherenceService;
+import com.healthmedtracker.services.DatabaseMedicationService;
 import com.healthmedtracker.services.HistoryService;
 import com.healthmedtracker.services.MedicationService;
 import com.healthmedtracker.services.ReminderService;
@@ -22,7 +23,7 @@ public class App {
         } catch (Exception ignored) {}
 
         // Wire up all services
-        MedicationService  medService       = new MedicationService();
+        MedicationService medService = new DatabaseMedicationService();
         ScheduleService    scheduleService  = new ScheduleService();
         AdherenceService   adherenceService = new AdherenceService();
         HistoryService     historyService   = new HistoryService(adherenceService);

@@ -694,7 +694,10 @@ public class MainWindow extends JFrame {
         Medication med = grouped.get(medName).get(0).getMedication();
 
         // Determine if medication is active on this date
-        LocalDate start = med.getStartDate();// If you store start date, replace this
+        LocalDate start = med.getStartDate();
+        if (start == null) {
+           start = LocalDate.now();   // fallback so calendar doesn't crash
+            }// If you store start date, replace this
         LocalDate end = start.plusDays(med.getDurationDays() - 1);
 
         if (date.isBefore(start) || date.isAfter(end)) {
