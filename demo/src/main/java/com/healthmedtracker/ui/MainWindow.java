@@ -18,7 +18,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * MainWindow — Section 1 UI (Binyam)
@@ -43,6 +45,20 @@ public class MainWindow extends JFrame {
     private static final Font  FONT_HEAD  = new Font("SansSerif", Font.BOLD,   15);
     private static final Font  FONT_BODY  = new Font("SansSerif", Font.PLAIN,  13);
     private static final Font  FONT_SMALL = new Font("SansSerif", Font.PLAIN,  12);
+   
+    private final Color[] MED_COLORS = {
+    new Color(0x1D9E75), // teal
+    new Color(0xD85A30), // coral
+    new Color(0x3C3489), // slate
+    new Color(0xF4A300), // amber
+    new Color(0x0080FF)  // blue
+};
+
+    private Color getColorForMedication(String medId) {
+    int index = Math.abs(medId.hashCode()) % MED_COLORS.length;
+    return MED_COLORS[index];
+     }
+
 
     // --- services (all injected from App.java) ---
     private final MedicationService  medService;
@@ -138,6 +154,7 @@ public class MainWindow extends JFrame {
         tabs.addTab("  Schedule     ", buildScheduleTab());
         tabs.addTab("  Adherence    ", buildAdherenceTab());
         tabs.addTab("  History      ", buildHistoryTab());
+        tabs.addTab("  Calendar     ", buildCalendarTab());
 
         // Refresh relevant data when user switches tabs
         tabs.addChangeListener(e -> {
@@ -145,10 +162,13 @@ public class MainWindow extends JFrame {
             if (idx == 1) refreshSchedule();
             if (idx == 2) refreshAdherence();
             if (idx == 3) refreshHistory();
+            if (idx == 4) refreshCalendar();
         });
 
         add(header, BorderLayout.NORTH);
         add(tabs,   BorderLayout.CENTER);
+        new Timer(5000, e -> refreshCalendar()).start();
+
     }
 
     // ================================================================
@@ -196,6 +216,7 @@ public class MainWindow extends JFrame {
             todaySchedule = scheduleService.generateDailySchedule(
                     medService.getAllMedications(), LocalDate.now());
             applyAdherenceToSchedule();
+            refreshCalendar();
             refreshSchedule();
         });
 
@@ -370,6 +391,7 @@ public class MainWindow extends JFrame {
                 medService.getAllMedications(), LocalDate.now()
             );
             applyAdherenceToSchedule();
+            refreshCalendar();
             refreshSchedule();
 
             dialog.dispose();
@@ -558,6 +580,155 @@ public class MainWindow extends JFrame {
             });
         }
     }
+    // ================================================================
+//  Tab 5 — Calendar View
+// ================================================================
+
+    private JPanel calendarGrid;
+    private JLabel monthLabel;
+    private LocalDate calendarDate = LocalDate.now();
+
+    private JPanel buildCalendarTab() {
+      JPanel panel = new JPanel(new BorderLayout(15, 15));
+     panel.setBackground(BG);
+     panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+    // --- Header (Month / Year Navigation) ---
+     JPanel header = new JPanel(new BorderLayout());
+     header.setBackground(BG);
+
+      monthLabel = new JLabel("", SwingConstants.CENTER);
+      monthLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
+      monthLabel.setForeground(SLATE);
+
+      JButton prev = ghostButton("  ◀ Previous  ");
+      JButton next = ghostButton("  Next ▶  ");
+
+      prev.addActionListener(e -> {
+        calendarDate = calendarDate.minusMonths(1);
+        refreshCalendar();
+    });
+
+    next.addActionListener(e -> {
+        calendarDate = calendarDate.plusMonths(1);
+        refreshCalendar();
+    });
+
+    header.add(prev, BorderLayout.WEST);
+    header.add(monthLabel, BorderLayout.CENTER);
+    header.add(next, BorderLayout.EAST);
+
+    // --- Grid Container ---
+    calendarGrid = new JPanel(new GridLayout(0, 7, 8, 8));
+    calendarGrid.setBackground(BG);
+
+    panel.add(header, BorderLayout.NORTH);
+    panel.add(new JScrollPane(calendarGrid,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
+            BorderLayout.CENTER);
+
+    refreshCalendar();
+    return panel;
+}
+
+    public void refreshCalendar() {
+    calendarGrid.removeAll();
+    monthLabel.setText(calendarDate.getMonth().toString() + " " + calendarDate.getYear());
+
+    // Day Headers (SUN, MON, etc.)
+    String[] days = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+    for (String d : days) {
+        JLabel l = new JLabel(d, SwingConstants.CENTER);
+        l.setFont(new Font("SansSerif", Font.BOLD, 13));
+        l.setForeground(TEXT_MED);
+        calendarGrid.add(l);
+    }
+
+    LocalDate firstOfMonth = calendarDate.withDayOfMonth(1);
+    int skip = firstOfMonth.getDayOfWeek().getValue() % 7;
+
+    // Empty slots for previous month
+    for (int i = 0; i < skip; i++) {
+        JPanel empty = new JPanel();
+        empty.setBackground(BG);
+        calendarGrid.add(empty);
+    }
+
+    int daysInMonth = calendarDate.lengthOfMonth();
+    for (int i = 1; i <= daysInMonth; i++) {
+        LocalDate date = calendarDate.withDayOfMonth(i);
+        calendarGrid.add(createDayPanel(date));
+    }
+
+    calendarGrid.revalidate();
+    calendarGrid.repaint();
+}
+
+   private JPanel createDayPanel(LocalDate date) {
+    JPanel box = new JPanel();
+    box.setLayout(new BorderLayout());
+    box.setBorder(BorderFactory.createLineBorder(new Color(0xD0D0D0)));
+    box.setBackground(Color.WHITE);
+
+    JLabel dayLabel = new JLabel(String.valueOf(date.getDayOfMonth()), SwingConstants.CENTER);
+    dayLabel.setFont(FONT_BODY);
+    dayLabel.setForeground(TEXT_DARK);
+    box.add(dayLabel, BorderLayout.NORTH);
+    List<ScheduledDose> doses = scheduleService.generateDailySchedule(medService.getAllMedications(), date);
+    Map<String, List<ScheduledDose>> grouped = new LinkedHashMap<>();
+    for (ScheduledDose d : doses) {
+        String medName = d.getMedication().getName();
+        grouped.putIfAbsent(medName, new ArrayList<>());
+        grouped.get(medName).add(d);
+    }
+    
+
+    JPanel timesList = new JPanel();
+    timesList.setLayout(new BoxLayout(timesList, BoxLayout.Y_AXIS));
+    timesList.setBackground(Color.WHITE);
+    DateTimeFormatter fmt = DateTimeFormatter.ofPattern("hh:mm a");
+
+    for (String medName : grouped.keySet()) {
+
+        Medication med = grouped.get(medName).get(0).getMedication();
+
+        // Determine if medication is active on this date
+        LocalDate start = LocalDate.now(); // If you store start date, replace this
+        LocalDate end = start.plusDays(med.getDurationDays() - 1);
+
+        if (date.isBefore(start) || date.isAfter(end)) {
+            continue; // Skip inactive days
+        }
+
+        // Medication name
+        JLabel medLabel = new JLabel(medName);
+        medLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        medLabel.setForeground(getColorForMedication(med.getId()));
+        timesList.add(medLabel);
+
+        // Times
+        for (ScheduledDose d : grouped.get(medName)) {
+            JLabel timeLabel = new JLabel("• " + d.getTime().toLocalTime().format(fmt));
+            timeLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            timeLabel.setForeground(getColorForMedication(med.getId()));
+            timesList.add(timeLabel);
+        }
+
+        timesList.add(Box.createVerticalStrut(4)); // spacing
+    }
+    box.add(timesList, BorderLayout.CENTER);
+    return box;
+}
+
+
+
+
+
+
+
+
+
 
     // ================================================================
     //  Helpers — styled components
@@ -642,6 +813,12 @@ public class MainWindow extends JFrame {
             while (true) {
                 try {
                     LocalDateTime now = LocalDateTime.now();
+                    LocalDate today = LocalDate.now();
+                    if (!today.equals(calendarDate)) {
+                            calendarDate = today;
+                             SwingUtilities.invokeLater(this::refreshCalendar);
+}
+
 
                     if (todaySchedule.isEmpty()) {
                         todaySchedule = scheduleService.generateDailySchedule(
