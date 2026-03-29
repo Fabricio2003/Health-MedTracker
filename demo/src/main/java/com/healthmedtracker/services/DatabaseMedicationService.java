@@ -29,6 +29,7 @@ public class DatabaseMedicationService extends MedicationService {
                 int freq = rs.getInt("frequency");
                 int duration = rs.getInt("duration_days");
                 int qty = rs.getInt("quantity_per_bottle");
+                String notes = rs.getString("notes");
 
                 String startStr = rs.getString("start_date");
                 LocalDate startDate = (startStr != null)
@@ -38,7 +39,7 @@ public class DatabaseMedicationService extends MedicationService {
                 List<LocalTime> times = loadDoseTimes(id);
 
                 Medication med = new Medication(
-                        id, name, dosage, freq, duration, qty, startDate, times
+                        id, name, dosage, freq, duration, qty, notes, startDate, times
                 );
 
                 super.addMedication(med);

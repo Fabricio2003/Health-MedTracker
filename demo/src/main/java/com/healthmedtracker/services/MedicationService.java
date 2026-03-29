@@ -69,12 +69,8 @@ public class MedicationService {
         }
     }
 
-    public void renumberMedications() {
-    List<Medication> meds = getAllMedications();
-    for (int i = 0; i < meds.size(); i++) {
-        meds.get(i).setId(String.valueOf(i + 1));
-    }
+    
 }
 
 
-}
+

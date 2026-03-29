@@ -147,7 +147,7 @@ public class MainWindow extends JFrame {
         header.add(dateLabel, BorderLayout.EAST);
 
         // Tabs
-        JTabbedPane tabs = new JTabbedPane();
+        tabs = new JTabbedPane();
         tabs.setFont(FONT_BODY);
         tabs.setBackground(BG);
         tabs.addTab("  Medications  ", buildMedicationsTab());
@@ -159,10 +159,12 @@ public class MainWindow extends JFrame {
         // Refresh relevant data when user switches tabs
         tabs.addChangeListener(e -> {
             int idx = tabs.getSelectedIndex();
-            if (idx == 1) refreshSchedule();
-            if (idx == 2) refreshAdherence();
-            if (idx == 3) refreshHistory();
-            if (idx == 4) refreshCalendar();
+            switch (idx) {
+                case 1 -> refreshSchedule();
+                case 2 -> refreshAdherence();
+                case 3 -> refreshHistory();
+                case 4 -> refreshCalendar();
+    }
         });
 
         add(header, BorderLayout.NORTH);
@@ -337,7 +339,7 @@ public class MainWindow extends JFrame {
     JButton save = primaryButton("Save");
     save.addActionListener(e -> {
         try {
-            String id   = String.valueOf(medService.getAllMedications().size() + 1);
+            String id = java.util.UUID.randomUUID().toString();
             String name = nameF.getText().trim();
             String dos  = doseF.getText().trim();
             int qty     = Integer.parseInt(qtyF.getText().trim());
@@ -383,7 +385,7 @@ public class MainWindow extends JFrame {
             }
 
             medService.addMedication(
-                new Medication(id, name, dos, freq, dur, qty, LocalDate.now(), times)
+                new Medication(id, name, dos, freq, dur, qty, "", LocalDate.now(), times)
             );
 
             refreshMedications();
@@ -462,7 +464,10 @@ public class MainWindow extends JFrame {
     }
 
     private void refreshSchedule() {
-        if (todaySchedule.isEmpty()) {
+        if (tabs.getSelectedIndex() != 1) {
+        return;
+    }
+        if (todaySchedule.isEmpty() && tabs.getSelectedIndex() == 1) {
             todaySchedule = scheduleService.generateDailySchedule(
                     medService.getAllMedications(), LocalDate.now());
             applyAdherenceToSchedule();
@@ -586,7 +591,12 @@ public class MainWindow extends JFrame {
 
     private JPanel calendarGrid;
     private JLabel monthLabel;
-    private LocalDate calendarDate = LocalDate.now();
+    private LocalDate calendarViewDate = LocalDate.now();
+    private LocalDate lastKnownToday = LocalDate.now();
+    private JTabbedPane tabs;
+    
+
+  
 
     private JPanel buildCalendarTab() {
       JPanel panel = new JPanel(new BorderLayout(15, 15));
@@ -605,12 +615,12 @@ public class MainWindow extends JFrame {
       JButton next = ghostButton("  Next ▶  ");
 
       prev.addActionListener(e -> {
-        calendarDate = calendarDate.minusMonths(1);
+        calendarViewDate = calendarViewDate.minusMonths(1);
         refreshCalendar();
     });
 
     next.addActionListener(e -> {
-        calendarDate = calendarDate.plusMonths(1);
+        calendarViewDate = calendarViewDate.plusMonths(1);
         refreshCalendar();
     });
 
@@ -634,7 +644,7 @@ public class MainWindow extends JFrame {
 
     public void refreshCalendar() {
     calendarGrid.removeAll();
-    monthLabel.setText(calendarDate.getMonth().toString() + " " + calendarDate.getYear());
+    monthLabel.setText(calendarViewDate.getMonth().toString() + " " + calendarViewDate.getYear());
 
     // Day Headers (SUN, MON, etc.)
     String[] days = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
@@ -645,7 +655,7 @@ public class MainWindow extends JFrame {
         calendarGrid.add(l);
     }
 
-    LocalDate firstOfMonth = calendarDate.withDayOfMonth(1);
+    LocalDate firstOfMonth = calendarViewDate.withDayOfMonth(1);
     int skip = firstOfMonth.getDayOfWeek().getValue() % 7;
 
     // Empty slots for previous month
@@ -655,9 +665,9 @@ public class MainWindow extends JFrame {
         calendarGrid.add(empty);
     }
 
-    int daysInMonth = calendarDate.lengthOfMonth();
+    int daysInMonth = calendarViewDate.lengthOfMonth();
     for (int i = 1; i <= daysInMonth; i++) {
-        LocalDate date = calendarDate.withDayOfMonth(i);
+        LocalDate date = calendarViewDate.withDayOfMonth(i);
         calendarGrid.add(createDayPanel(date));
     }
 
@@ -696,7 +706,7 @@ public class MainWindow extends JFrame {
         // Determine if medication is active on this date
         LocalDate start = med.getStartDate();
         if (start == null) {
-           start = LocalDate.now();   // fallback so calendar doesn't crash
+           return box;
             }// If you store start date, replace this
         LocalDate end = start.plusDays(med.getDurationDays() - 1);
 
@@ -817,9 +827,17 @@ public class MainWindow extends JFrame {
                 try {
                     LocalDateTime now = LocalDateTime.now();
                     LocalDate today = LocalDate.now();
-                    if (!today.equals(calendarDate)) {
-                            calendarDate = today;
-                             SwingUtilities.invokeLater(this::refreshCalendar);
+                // Only auto-refresh calendar if the actual day changed
+                if (!today.equals(lastKnownToday)) {
+                    lastKnownToday = today;
+
+                  SwingUtilities.invokeLater(() -> {
+                // Optional: only jump calendar if user is currently viewing today's month
+                if (calendarViewDate.getMonth().equals(today.getMonth()) &&
+                       calendarViewDate.getYear() == today.getYear()) {
+                         refreshCalendar();
+        }
+    });
 }
 
 

@@ -36,5 +36,11 @@ public class App {
                     adherenceService, historyService, reminderService);
             window.setVisible(true);
         });
+        System.out.println("DB path: " + new java.io.File("project.db").getAbsolutePath());
+        System.out.println("Loaded meds: " + medService.getAllMedications().size());
+        System.out.println("refreshCalendar called from: " + Thread.currentThread().getName());
+
+
+
     }
 }
