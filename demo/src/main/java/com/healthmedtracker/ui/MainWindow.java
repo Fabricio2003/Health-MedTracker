@@ -1,5 +1,5 @@
 package com.healthmedtracker.ui;
-
+import com.healthmedtracker.utils.DatabaseInitializer;
 import com.healthmedtracker.models.Medication;
 import com.healthmedtracker.models.ScheduledDose;
 import com.healthmedtracker.models.AdherenceRecord;

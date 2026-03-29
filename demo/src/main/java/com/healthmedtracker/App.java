@@ -8,11 +8,14 @@ import com.healthmedtracker.services.ScheduleService;
 import com.healthmedtracker.ui.MainWindow;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import com.healthmedtracker.utils.DatabaseInitializer;
 
 public class App {
 
     public static void main(String[] args) {
+        DatabaseInitializer.init();
 
+        System.out.println("App started");
         // Use the system look-and-feel so it feels native on any OS
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
